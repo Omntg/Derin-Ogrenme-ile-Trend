@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hisse Trend Analizi</title>
+
+    <!-- Plotly.js CDN -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+    <style>
+        /* Temel Reset ve Stil */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        /* Form Panel */
+        .control-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            backdrop-filter: blur(10px);
+        }
+        .form-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .form-group label {
+            font-weight: 600;
+            color: #555;
+            font-size: 0.9rem;
+        }
+        .form-group select {
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+            background: white;
+            min-width: 200px;
+            transition: all 0.3s ease;
+        }
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .analyze-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            align-self: flex-end;
+        }
+        .analyze-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .analyze-btn:active {
+            transform: translateY(0);
+        }
+        /* Grafik Paneli */
+        .chart-container {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            backdrop-filter: blur(10px);
+            min-height: 600px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 50px;
+            font-size: 1.1rem;
+            color: #667eea;
+        }
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error-message {
+            display: none;
+            background: #ff6b6b;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            text-align: center;
+        }
+        .info-panel {
+            display: none;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            border-left: 4px solid #667eea;
+        }
+        .signal-legend {
+            display: none;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+        }
+        .buy-signal { background-color: #00c851; }
+        .sell-signal { background-color: #ff4444; }
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            .header h1 {
+                font-size: 2rem;
+            }
+            .form-container {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .form-group select {
+                min-width: auto;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📈 Hisse Trend Analizi</h1>
+            <p>Derin öğrenme modeli ile hisse senedi trend tahmini</p>
+        </div>
+
+        <div class="control-panel">
+            <form method="post" action="/predict/" id="analyzeForm">
+                <div class="form-container">
+                    <div class="form-group">
+                        <label for="ticker">Hisse Senedi Seçin:</label>
+                        <select name="ticker" id="ticker" required>
+                            <option value="">-- Hisse Seçin --</option>
+                            {% for t in tickers %}
+                                <option value="{{ t }}" {% if selected_ticker == t %}selected{% endif %}>{{ t }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="analyze-btn">🔍 Analiz Et</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="chart-container">
+            <div class="signal-legend" id="signalLegend">
+                <div class="legend-item">
+                    <div class="legend-color buy-signal"></div>
+                    <span>Alış Sinyali (Yükseliş Beklentisi)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color sell-signal"></div>
+                    <span>Satış Sinyali (Düşüş Beklentisi)</span>
+                </div>
+            </div>
+            
+            <div class="loading" id="loading">Veriler yükleniyor ve analiz ediliyor...</div>
+            <div class="error-message" id="errorMessage"></div>
+            <div id="chartDiv" style="width: 100%; height: 500px;"></div>
+            
+            <div class="info-panel" id="infoPanel">
+                <h4>💡 Nasıl Kullanılır:</h4>
+                <ul style="margin-left: 20px; margin-top: 10px;">
+                    <li><strong>Yakınlaştırma:</strong> Farenin tekerleğini kullanın veya çift tıklayın</li>
+                    <li><strong>Kaydırma:</strong> Grafiği tıklayıp sürükleyin</li>
+                    <li><strong>Sıfırlama:</strong> Grafik üzerindeki kontrol butonlarını kullanın</li>
+                    <li><strong>Sinyaller:</strong> Yeşil noktalar alış, kırmızı noktalar satış sinyali</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Form submit olayını yakala
+        document.getElementById('analyzeForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const ticker = document.getElementById('ticker').value;
+            if (!ticker) {
+                showError('Lütfen bir hisse senedi seçin!');
+                return;
+            }
+            loadChart(ticker);
+        });
+
+        // Sayfa yüklendiğinde seçili ticker varsa grafiği yükle
+        document.addEventListener('DOMContentLoaded', function() {
+            const selectedTicker = "{{ selected_ticker or '' }}";
+            if (selectedTicker) {
+                loadChart(selectedTicker);
+            }
+        });
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('errorMessage').style.display = 'none';
+            document.getElementById('chartDiv').innerHTML = '';
+            document.getElementById('signalLegend').style.display = 'none';
+            document.getElementById('infoPanel').style.display = 'none';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorMessage').style.display = 'block';
+            hideLoading();
+        }
+
+        function loadChart(ticker) {
+            showLoading();
+            fetch(`/plot-data/${ticker}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    plotChart(data);
+                    hideLoading();
+                    document.getElementById('signalLegend').style.display = 'flex';
+                    document.getElementById('infoPanel').style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Grafik yükleme hatası:', error);
+                    showError('Grafik yüklenirken hata oluştu: ' + error.message);
+                });
+        }
+
+        function plotChart(data) {
+            const ohlcData = data.ohlc_data;
+            const predictions = data.predictions || [];
+
+            if (!ohlcData || ohlcData.length === 0) {
+                showError('Veri bulunamadı!');
+                return;
+            }
+
+            // OHLC dizilerini hazırla
+            const dates  = ohlcData.map(d => d.date);
+            const opens  = ohlcData.map(d => d.open);
+            const highs  = ohlcData.map(d => d.high);
+            const lows   = ohlcData.map(d => d.low);
+            const closes = ohlcData.map(d => d.close);
+
+            // Mum (candlestick) trace
+            const candlestickTrace = {
+                x: dates,
+                open: opens,
+                high: highs,
+                low: lows,
+                close: closes,
+                type: 'candlestick',
+                name: data.ticker,
+                increasing: {
+                    line: { color: '#00c851', width: 1 },
+                    fillcolor: '#00c851'
+                },
+                decreasing: {
+                    line: { color: '#ff4444', width: 1 },
+                    fillcolor: '#ff4444'
+                },
+                hovertemplate: '<b>%{fullData.name}</b><br>' +
+                              'Tarih: %{x}<br>' +
+                              'Açılış: ₺%{open:.2f}<br>' +
+                              'En Yüksek: ₺%{high:.2f}<br>' +
+                              'En Düşük: ₺%{low:.2f}<br>' +
+                              'Kapanış: ₺%{close:.2f}<extra></extra>'
+            };
+
+            const traces = [candlestickTrace];
+
+            // Alış/Satış sinyali noktaları
+            if (predictions.length > 0) {
+                const buySignals  = predictions.filter(p => p.pred === 1);
+                const sellSignals = predictions.filter(p => p.pred === 0);
+
+                if (buySignals.length > 0) {
+                    traces.push({
+                        x: buySignals.map(s => s.date),
+                        y: buySignals.map(s => s.close),
+                        mode: 'markers',
+                        type: 'scatter',
+                        name: 'Alış Sinyali',
+                        marker: {
+                            color: '#00c851',
+                            size: 12,
+                            symbol: 'triangle-up',
+                            line: { color: 'white', width: 2 }
+                        },
+                        hovertemplate: '<b>Alış Sinyali</b><br>' +
+                                      'Tarih: %{x}<br>' +
+                                      'Fiyat: ₺%{y:.2f}<extra></extra>'
+                    });
+                }
+                if (sellSignals.length > 0) {
+                    traces.push({
+                        x: sellSignals.map(s => s.date),
+                        y: sellSignals.map(s => s.close),
+                        mode: 'markers',
+                        type: 'scatter',
+                        name: 'Satış Sinyali',
+                        marker: {
+                            color: '#ff4444',
+                            size: 12,
+                            symbol: 'triangle-down',
+                            line: { color: 'white', width: 2 }
+                        },
+                        hovertemplate: '<b>Satış Sinyali</b><br>' +
+                                      'Tarih: %{x}<br>' +
+                                      'Fiyat: ₺%{y:.2f}<extra></extra>'
+                    });
+                }
+            }
+
+            // Grafik düzeni ve ayarları
+            const layout = {
+                title: {
+                    text: `${data.ticker} - Fiyat Analizi ve Trend Sinyalleri`,
+                    font: { size: 18, color: '#333' }
+                },
+                xaxis: {
+                    title: 'Tarih',
+                    type: 'date',
+                    rangeslider: { visible: false },
+                    showgrid: true,
+                    gridcolor: 'rgba(0,0,0,0.1)'
+                },
+                yaxis: {
+                    title: 'Fiyat (₺)',
+                    type: 'log',
+                    showgrid: true,
+                    gridcolor: 'rgba(0,0,0,0.1)',
+                    tickformat: '.2f'
+                },
+                plot_bgcolor: 'rgba(255,255,255,0.9)',
+                paper_bgcolor: 'transparent',
+                showlegend: true,
+                legend: {
+                    x: 0,
+                    y: 1,
+                    bgcolor: 'rgba(255,255,255,0.8)',
+                    bordercolor: 'rgba(0,0,0,0.2)',
+                    borderwidth: 1
+                },
+                margin: { l: 60, r: 40, t: 60, b: 40 },
+                hovermode: 'x unified'
+            };
+
+            const config = {
+                displayModeBar: true,
+                modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+                displaylogo: false,
+                responsive: true,
+                toImageButtonOptions: {
+                    format: 'png',
+                    filename: `${data.ticker}_analiz`,
+                    height: 600,
+                    width: 1000,
+                    scale: 1
+                }
+            };
+
+            Plotly.newPlot('chartDiv', traces, layout, config);
+        }
+    </script>
+</body>
+</html>
